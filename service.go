@@ -67,18 +67,20 @@ import (
 )
 
 const (
-	optionKeepAlive            = "KeepAlive"
-	optionKeepAliveDefault     = true
-	optionRunAtLoad            = "RunAtLoad"
-	optionRunAtLoadDefault     = false
-	optionUserService          = "UserService"
-	optionUserServiceDefault   = false
-	optionSessionCreate        = "SessionCreate"
-	optionSessionCreateDefault = false
-	optionLogOutput            = "LogOutput"
-	optionLogOutputDefault     = false
-	optionPrefix               = "Prefix"
-	optionPrefixDefault        = "application"
+	optionKeepAlive                     = "KeepAlive"
+	optionKeepAliveDefault              = true
+	optionRunAtLoad                     = "RunAtLoad"
+	optionRunAtLoadDefault              = false
+	optionUserService                   = "UserService"
+	optionUserServiceDefault            = false
+	optionSessionCreate                 = "SessionCreate"
+	optionSessionCreateDefault          = false
+	optionLimitLoadToSessionType        = "LimitLoadToSessionType"
+	optionLimitLoadToSessionTypeDefault = "Aqua"
+	optionLogOutput                     = "LogOutput"
+	optionLogOutputDefault              = false
+	optionPrefix                        = "Prefix"
+	optionPrefixDefault                 = "application"
 
 	optionRunWait            = "RunWait"
 	optionReloadSignal       = "ReloadSignal"
