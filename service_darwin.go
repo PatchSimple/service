@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"syscall"
@@ -103,11 +102,8 @@ func (s *darwinLaunchdService) getHomeDir() (string, error) {
 
 func (s *darwinLaunchdService) getServiceFilePath() (string, error) {
 	if s.userService {
-		homeDir, err := s.getHomeDir()
-		if err != nil {
-			return "", err
-		}
-		return homeDir + "/Library/LaunchAgents/" + s.Name + ".plist", nil
+		// for all users
+		return "/Library/LaunchAgents/" + s.Name + ".plist", nil
 	}
 	return "/Library/LaunchDaemons/" + s.Name + ".plist", nil
 }
@@ -132,6 +128,14 @@ func (s *darwinLaunchdService) getLogPaths() (string, string, error) {
 
 func (s *darwinLaunchdService) getLogPath(logDir, logType string) string {
 	return fmt.Sprintf("%s/%s.%s.log", logDir, s.Name, logType)
+}
+
+func (s *darwinLaunchdService) getActiveConsoleUserID() (string, error) {
+	_, out, err := runWithOutput("stat", "-f", "%u", "/dev/console")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(out, "\n"), nil
 }
 
 func (s *darwinLaunchdService) template() *template.Template {
@@ -162,14 +166,6 @@ func (s *darwinLaunchdService) Install() error {
 		return fmt.Errorf("Init already exists: %s", confPath)
 	}
 
-	if s.userService {
-		// Ensure that ~/Library/LaunchAgents exists.
-		err = os.MkdirAll(filepath.Dir(confPath), 0700)
-		if err != nil {
-			return err
-		}
-	}
-
 	f, err := os.Create(confPath)
 	if err != nil {
 		return err
@@ -186,18 +182,24 @@ func (s *darwinLaunchdService) Install() error {
 		*Config
 		Path string
 
-		KeepAlive, RunAtLoad bool
-		SessionCreate        bool
-		StandardOutPath      string
-		StandardErrorPath    string
+		KeepAlive, RunAtLoad   bool
+		SessionCreate          bool
+		LimitLoadToSessionType string
+		StandardOutPath        string
+		StandardErrorPath      string
 	}{
-		Config:            s.Config,
-		Path:              path,
-		KeepAlive:         s.Option.bool(optionKeepAlive, optionKeepAliveDefault),
-		RunAtLoad:         s.Option.bool(optionRunAtLoad, optionRunAtLoadDefault),
-		SessionCreate:     s.Option.bool(optionSessionCreate, optionSessionCreateDefault),
-		StandardOutPath:   stdOutPath,
-		StandardErrorPath: stdErrPath,
+		Config:        s.Config,
+		Path:          path,
+		KeepAlive:     s.Option.bool(optionKeepAlive, optionKeepAliveDefault),
+		RunAtLoad:     s.Option.bool(optionRunAtLoad, optionRunAtLoadDefault),
+		SessionCreate: s.Option.bool(optionSessionCreate, optionSessionCreateDefault),
+	}
+
+	if s.userService {
+		to.LimitLoadToSessionType = s.Option.string(optionLimitLoadToSessionType, optionLimitLoadToSessionTypeDefault)
+	} else {
+		to.StandardOutPath = stdOutPath
+		to.StandardErrorPath = stdErrPath
 	}
 
 	return s.template().Execute(f, to)
@@ -244,7 +246,17 @@ func (s *darwinLaunchdService) Start() error {
 	if err != nil {
 		return err
 	}
-	return run("launchctl", "load", confPath)
+
+	target := "system"
+	if s.userService {
+		activeConsoleUser, err := s.getActiveConsoleUserID()
+		if err != nil {
+			return err
+		}
+		target = "gui/" + activeConsoleUser
+	}
+
+	return run("launchctl", "bootstrap", target, confPath)
 }
 
 func (s *darwinLaunchdService) Stop() error {
@@ -252,15 +264,29 @@ func (s *darwinLaunchdService) Stop() error {
 	if err != nil {
 		return err
 	}
-	return run("launchctl", "unload", confPath)
+
+	target := "system"
+	if s.userService {
+		activeConsoleUser, err := s.getActiveConsoleUserID()
+		if err != nil {
+			return err
+		}
+		target = "gui/" + activeConsoleUser
+	}
+
+	return run("launchctl", "bootout", target, confPath)
 }
 
 func (s *darwinLaunchdService) Restart() error {
-	err := s.Stop()
-	if err != nil {
-		return err
+	status, _ := s.Status()
+	if status != StatusStopped {
+		err := s.Stop()
+		if err != nil {
+			return err
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	time.Sleep(50 * time.Millisecond)
+
 	return s.Start()
 }
 
@@ -326,6 +352,10 @@ var launchdConfig = `<?xml version="1.0" encoding="UTF-8"?>
 	<{{bool .RunAtLoad}}/>
 	<key>SessionCreate</key>
 	<{{bool .SessionCreate}}/>
+	{{- if .LimitLoadToSessionType}}
+	<key>LimitLoadToSessionType</key>
+	<string>{{html .LimitLoadToSessionType}}</string>
+	{{- end}}
 	{{- if .StandardErrorPath}}
 	<key>StandardErrorPath</key>
 	<string>{{html .StandardErrorPath}}</string>
