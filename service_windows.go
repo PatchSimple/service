@@ -352,6 +352,10 @@ func (ws *windowsService) Install() error {
 }
 
 func (ws *windowsService) Uninstall() error {
+	if err := ws.Stop(); err != nil {
+		return err
+	}
+
 	m, err := mgr.Connect()
 	if err != nil {
 		return err
@@ -544,7 +548,7 @@ func (ws *windowsService) stopWait(s *mgr.Service) error {
 				return err
 			}
 		case <-timeout:
-			break
+			return fmt.Errorf("stop service %s timeout", ws.Name)
 		}
 	}
 	return nil
