@@ -215,10 +215,7 @@ func (s *darwinLaunchdService) Uninstall() error {
 		return err
 	}
 	err = os.Remove(confPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
+	if err != nil && os.IsExist(err) {
 		return err
 	}
 	return nil

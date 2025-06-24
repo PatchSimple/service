@@ -380,6 +380,10 @@ func (ws *windowsService) Uninstall() error {
 		return fmt.Errorf("RemoveEventLogSource() failed: %s", err)
 	}
 
+	return ws.uninstallWait(m)
+}
+
+func (ws *windowsService) uninstallWait(m *mgr.Mgr) error {
 	// wait until the service is deleted
 	timeDuration := time.Millisecond * 100
 	timeout := time.After(getStopTimeout() + (timeDuration * 2))
