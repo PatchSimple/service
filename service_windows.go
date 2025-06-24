@@ -5,6 +5,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -351,6 +352,10 @@ func (ws *windowsService) Install() error {
 }
 
 func (ws *windowsService) Uninstall() error {
+	if err := ws.Stop(); err != nil {
+		return err
+	}
+
 	m, err := mgr.Connect()
 	if err != nil {
 		return err
@@ -358,18 +363,47 @@ func (ws *windowsService) Uninstall() error {
 	defer m.Disconnect()
 	s, err := m.OpenService(ws.Name)
 	if err != nil {
-		return fmt.Errorf("service %s is not installed", ws.Name)
+		if errno, ok := err.(syscall.Errno); ok && errno == errnoServiceDoesNotExist {
+			// not installed
+			return nil
+		}
+		return fmt.Errorf("error open service %s", ws.Name)
 	}
 	defer s.Close()
 	err = s.Delete()
 	if err != nil {
 		return err
 	}
+
 	err = eventlog.Remove(ws.Name)
-	if err != nil {
+	if err != nil && !errors.Is(err, syscall.ERROR_FILE_NOT_FOUND) {
 		return fmt.Errorf("RemoveEventLogSource() failed: %s", err)
 	}
-	return nil
+
+	return ws.uninstallWait(m)
+}
+
+func (ws *windowsService) uninstallWait(m *mgr.Mgr) error {
+	// wait until the service is deleted
+	timeDuration := time.Millisecond * 100
+	timeout := time.After(getStopTimeout() + (timeDuration * 2))
+	tick := time.NewTicker(timeDuration)
+	defer tick.Stop()
+	for {
+		select {
+		case <-tick.C:
+			svc, err := m.OpenService(ws.Name)
+			if err != nil {
+				if errno, ok := err.(syscall.Errno); ok && errno == errnoServiceDoesNotExist {
+					return nil
+				}
+				return fmt.Errorf("error open service %s", ws.Name)
+			}
+			svc.Close()
+		case <-timeout:
+			return fmt.Errorf("delete service %s timeout", ws.Name)
+		}
+	}
 }
 
 func (ws *windowsService) Run() error {
@@ -518,7 +552,7 @@ func (ws *windowsService) stopWait(s *mgr.Service) error {
 				return err
 			}
 		case <-timeout:
-			break
+			return fmt.Errorf("stop service %s timeout", ws.Name)
 		}
 	}
 	return nil
