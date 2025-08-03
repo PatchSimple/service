@@ -385,8 +385,8 @@ func (ws *windowsService) Uninstall() error {
 
 func (ws *windowsService) uninstallWait(m *mgr.Mgr) error {
 	// wait until the service is deleted
-	timeDuration := time.Millisecond * 100
-	timeout := time.After(getStopTimeout() + (timeDuration * 2))
+	timeDuration := time.Millisecond * 200
+	timeout := time.After(getStopTimeout() + (timeDuration * 8))
 	tick := time.NewTicker(timeDuration)
 	defer tick.Stop()
 	for {
