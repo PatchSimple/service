@@ -352,10 +352,6 @@ func (ws *windowsService) Install() error {
 }
 
 func (ws *windowsService) Uninstall() error {
-	if err := ws.Stop(); err != nil {
-		return err
-	}
-
 	m, err := mgr.Connect()
 	if err != nil {
 		return err
@@ -370,6 +366,11 @@ func (ws *windowsService) Uninstall() error {
 		return fmt.Errorf("error open service %s", ws.Name)
 	}
 	defer s.Close()
+
+	if err := ws.Stop(); err != nil {
+		return err
+	}
+
 	err = s.Delete()
 	if err != nil {
 		return err
@@ -385,8 +386,8 @@ func (ws *windowsService) Uninstall() error {
 
 func (ws *windowsService) uninstallWait(m *mgr.Mgr) error {
 	// wait until the service is deleted
-	timeDuration := time.Second
-	timeout := time.After(getStopTimeout() + (timeDuration * 5))
+	timeDuration := time.Millisecond * 200
+	timeout := time.After(time.Second * 20)
 	tick := time.NewTicker(timeDuration)
 	defer tick.Stop()
 	for {

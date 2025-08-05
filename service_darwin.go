@@ -266,6 +266,11 @@ func (s *darwinLaunchdService) Start() error {
 }
 
 func (s *darwinLaunchdService) Stop() error {
+	status, _ := s.Status()
+	if status != StatusRunning {
+		return nil
+	}
+
 	confPath, err := s.getServiceFilePath()
 	if err != nil {
 		return err
