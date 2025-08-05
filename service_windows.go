@@ -495,6 +495,11 @@ func (ws *windowsService) Start() error {
 }
 
 func (ws *windowsService) Stop() error {
+	status, _ := ws.Status()
+	if status != StatusRunning {
+		return nil
+	}
+
 	m, err := lowPrivMgr()
 	if err != nil {
 		return err

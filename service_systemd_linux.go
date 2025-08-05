@@ -273,6 +273,10 @@ func (s *systemd) Start() error {
 }
 
 func (s *systemd) Stop() error {
+	status, _ := s.Status()
+	if status != StatusRunning {
+		return nil
+	}
 	return s.runAction("stop")
 }
 
