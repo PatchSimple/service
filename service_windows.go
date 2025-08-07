@@ -381,13 +381,13 @@ func (ws *windowsService) Uninstall() error {
 		return fmt.Errorf("RemoveEventLogSource() failed: %s", err)
 	}
 
-	return ws.uninstallWait(m)
+	return nil
 }
 
 func (ws *windowsService) uninstallWait(m *mgr.Mgr) error {
 	// wait until the service is deleted
 	timeDuration := time.Millisecond * 200
-	timeout := time.After(time.Second * 20)
+	timeout := time.After(time.Second * 5)
 	tick := time.NewTicker(timeDuration)
 	defer tick.Stop()
 	for {
@@ -480,6 +480,11 @@ func (ws *windowsService) Status() (Status, error) {
 }
 
 func (ws *windowsService) Start() error {
+	status, _ := ws.Status()
+	if status == StatusRunning {
+		return nil
+	}
+
 	m, err := lowPrivMgr()
 	if err != nil {
 		return err
@@ -537,6 +542,11 @@ func (ws *windowsService) Restart() error {
 }
 
 func (ws *windowsService) stopWait(s *mgr.Service) error {
+	st, _ := ws.Status()
+	if st == StatusStopped {
+		return nil
+	}
+
 	// First stop the service. Then wait for the service to
 	// actually stop before starting it.
 	status, err := s.Control(svc.Stop)
