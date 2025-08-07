@@ -222,16 +222,26 @@ func (s *darwinLaunchdService) Uninstall() error {
 }
 
 func (s *darwinLaunchdService) Status() (Status, error) {
-	exitCode, out, err := runWithOutput("launchctl", "list", s.Name)
+	target := "system"
+	if s.userService {
+		activeConsoleUser, err := s.getActiveConsoleUserID()
+		if err != nil {
+			return StatusUnknown, err
+		}
+		target = "gui/" + activeConsoleUser
+	}
+	target = target + "/" + s.Name
+
+	exitCode, out, err := runWithOutput("launchctl", "print", target)
 	if exitCode == 0 && err != nil {
 		if !strings.Contains(err.Error(), "failed with stderr") {
 			return StatusUnknown, err
 		}
 	}
 
-	re := regexp.MustCompile(`"PID" = ([0-9]+);`)
+	re := regexp.MustCompile(`state\s*=\s*running`)
 	matches := re.FindStringSubmatch(out)
-	if len(matches) == 2 {
+	if len(matches) > 0 {
 		return StatusRunning, nil
 	}
 
@@ -248,6 +258,11 @@ func (s *darwinLaunchdService) Status() (Status, error) {
 }
 
 func (s *darwinLaunchdService) Start() error {
+	status, _ := s.Status()
+	if status == StatusRunning {
+		return nil
+	}
+
 	confPath, err := s.getServiceFilePath()
 	if err != nil {
 		return err
